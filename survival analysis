@@ -1,0 +1,89 @@
+---
+title: "Survival analysis in r"
+author: "qi zhang"
+date: "2025-05-08"
+output: html_document
+source: https://epirhandbook.com/en/new_pages/survival_analysis.html
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+#In the doc, we tried to use new tools to be enlarge our skill pool.#
+
+####Load packages
+#Instead of library function,we use p_load from pacman.
+```{r cars}
+#install.packages("pacman")
+library(pacman)
+p_load(ggplot2,rio,dplyr)
+```
+
+####import dataset
+#use rio rather than setwd/import/export
+```{r cars}
+# import linelist
+linelist_case_data <- rio::import("linelist_cleaned.rds")
+```
+
+```{r cars}
+#create a new data called linelist_surv from the linelist_case_data
+
+linelist_surv <-  linelist_case_data %>% 
+     
+  dplyr::filter(
+       # remove observations with wrong or missing dates of onset or date of outcome
+       date_outcome > date_onset) %>% 
+  
+  dplyr::mutate(
+       # create the event var which is 1 if the patient died and 0 if he was right censored
+       event = ifelse(is.na(outcome) | outcome == "Recover", 0, 1), 
+    
+       # create the var on the follow-up time in days
+       futime = as.double(date_outcome - date_onset), 
+    
+       # create a new age category variable with only 3 strata levels
+       age_cat_small = dplyr::case_when( 
+            age_years < 5  ~ "0-4",
+            age_years >= 5 & age_years < 20 ~ "5-19",
+            age_years >= 20   ~ "20+"),
+       
+       # previous step created age_cat_small var as character.
+       # now convert it to factor and specify the levels.
+       # Note that the NA values remain NA's and are not put in a level "unknown" for example,
+       # since in the next analyses they have to be removed.
+       age_cat_small = fct_relevel(age_cat_small, "0-4", "5-19", "20+")
+       )
+```
+
+
+```{r cars}
+summary(linelist_surv$futime)
+```
+
+```{r cars}
+# cross tabulate the new event var and the outcome var from which it was created
+# to make sure the code did what it was intended to
+linelist_surv %>% 
+  tabyl(outcome, event)
+```
+
+```{r cars}
+linelist_surv %>% 
+  tabyl(age_cat_small, age_cat)
+```
+
+```{r cars}
+linelist_surv %>% 
+  select(case_id, age_cat_small, date_onset, date_outcome, outcome, event, futime) %>% 
+  head(10)
+```
+
+```{r cars}
+linelist_surv %>% 
+  tabyl(gender, age_cat_small, show_na = F) %>% 
+  adorn_totals(where = "both") %>% 
+  adorn_percentages() %>% 
+  adorn_pct_formatting() %>% 
+  adorn_ns(position = "front")
+```
