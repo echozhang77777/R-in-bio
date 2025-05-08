@@ -1,0 +1,125 @@
+---
+title: "simulation introduction"
+author: "qi zhang"
+date: "2024-11-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Set random seed for reproducibility
+set.seed(123)
+
+# Trial parameters
+n_patients <- 200  # Total number of patients
+treatment_effect <- 0.3  # Expected treatment effect
+alpha <- 0.05  # Significance level
+power <- 0.8  # Desired power
+```
+
+```{r}
+# Generate treatment assignments (1 = treatment, 0 = control)
+treatment <- sample(c(0,1), n_patients, replace=TRUE)
+
+# Simulate patient outcomes
+control_mean <- 0
+control_sd <- 1
+treatment_mean <- control_mean + treatment_effect
+
+# Generate outcomes
+outcomes <- numeric(n_patients)
+for(i in 1:n_patients) {
+  if(treatment[i] == 1) {
+    outcomes[i] <- rnorm(1, mean=treatment_mean, sd=control_sd)
+  } else {
+    outcomes[i] <- rnorm(1, mean=control_mean, sd=control_sd)
+  }
+}
+```
+
+
+```{r}
+# Perform t-test
+trial_result <- t.test(outcomes[treatment==1], 
+                      outcomes[treatment==0])
+
+# Print results
+print(trial_result)
+
+# Calculate effect size
+effect_size <- mean(outcomes[treatment==1]) - mean(outcomes[treatment==0])
+print(paste("Observed effect size:", round(effect_size, 3)))
+```
+
+```{r}
+# Function to run multiple trials
+run_trials <- function(n_sims = 1000) {
+  significant_results <- 0
+  
+  for(i in 1:n_sims) {
+    # Generate new trial data
+    treatment <- sample(c(0,1), n_patients, replace=TRUE)
+    outcomes <- numeric(n_patients)
+    
+    for(j in 1:n_patients) {
+      if(treatment[j] == 1) {
+        outcomes[j] <- rnorm(1, mean=treatment_mean, sd=control_sd)
+      } else {
+        outcomes[j] <- rnorm(1, mean=control_mean, sd=control_sd)
+      }
+    }
+    
+    # Perform t-test
+    p_value <- t.test(outcomes[treatment==1], 
+                      outcomes[treatment==0])$p.value
+    
+    # Count significant results
+    if(p_value < alpha) significant_results <- significant_results + 1
+  }
+  
+  return(significant_results/n_sims)
+}
+
+# Calculate empirical power
+empirical_power <- run_trials()
+print(paste("Empirical power:", round(empirical_power, 3)))
+```
+
+```{r}
+# Perform t-test
+trial_result <- t.test(outcomes[treatment==1], 
+                      outcomes[treatment==0])
+
+# Print results
+print(trial_result)
+
+# Calculate effect size
+effect_size <- mean(outcomes[treatment==1]) - mean(outcomes[treatment==0])
+print(paste("Observed effect size:", round(effect_size, 3)))
+```
+
+```{r}
+# Create boxplot of outcomes by treatment group
+boxplot(outcomes ~ treatment, 
+        names=c("Control", "Treatment"),
+        main="Outcome Distribution by Treatment Group",
+        ylab="Outcome",
+        xlab="Group")
+
+# Add points for individual observations
+points(jitter(treatment + 1), outcomes, col="blue", alpha=0.5)
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
