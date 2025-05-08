@@ -1,0 +1,19 @@
+
+
+## Example: Binomial sampling and uniform prior (page 42)
+#data
+n <- 10
+y <- 2
+
+#prior
+a <- 1
+b <- 1
+
+qbeta(c(.025, .975), a + y, b + n - y)
+
+## Figure 3.5 (page 43)
+par(mar = c(3, 3, 1, 1), mgp = c(1.75, .75, 0))
+theta.support <- seq(0, 1, length = 100)
+plot(theta.support, dbeta(theta.support, a + y, b + n - y), type="l",
+     xlab = expression(theta), ylab = expression(paste(italic("p("), theta, "|y)"))) 
+abline(v = qbeta(c(.025, .975), a + y, b + n - y))
