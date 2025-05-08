@@ -1,0 +1,268 @@
+
+# Date: 2021-01-13
+
+## load pacakges ####
+library(rjags)
+library(tidyverse)
+
+## set working directory ####
+setwd("...")
+
+## 3.1 The Binomial model ####
+## Example: Binomial sampling and uniform prior (page 42)
+dat <- list(y = 2, n = 10,
+            a = 1, b = 1,
+            n.pred = 100)
+model <- jags.model(file = "JAGS_code/Example_C3_P42.txt", 
+                    data = dat, n.chains = 1)
+update(model, n.iter = 1000)
+mcmc <- coda.samples(model, variable.names = c("theta"), 
+                     n.iter = 20000, thin = 10)
+summary(mcmc)
+
+## Figure 3.5 (page 43)
+theta.post <- as_tibble(as.array(mcmc[,1]))
+q025 <- quantile(theta.post$value, 0.025)
+q975 <- quantile(theta.post$value, 0.975)
+
+ggplot(theta.post) + 
+  geom_density(aes(x=value)) + 
+  geom_vline(xintercept = q025) + 
+  geom_vline(xintercept = q975) + 
+  scale_x_continuous(name="theta", limits = c(0,1), breaks = seq(0,1,0.2)) +
+  scale_y_continuous(name="p(theta|y)", limits = c(0,3.5), breaks = seq(0,3,0.5)) +
+  theme_classic()
+
+## 3.2 The Poisson model ####
+## Example: Birth rates (page 48)
+load("Data/gss.RData")
+y1 <- gss$CHILDS[gss$FEMALE==1 & gss$YEAR>=1990 & gss$AGE==40 & gss$DEG<3]
+y2 <- gss$CHILDS[gss$FEMALE==1 & gss$YEAR>=1990 & gss$AGE==40 & gss$DEG>=3]
+
+y1 <- y1[!is.na(y1)]
+y2 <- y2[!is.na(y2)]
+
+dat <- list(y1 = y1, y2 = y2, a = 2, b = 1)
+model <- jags.model(file = "JAGS_code/Example_C3_P49.txt", 
+                    data = dat, n.chains = 1)
+update(model, n.iter = 1000)
+mcmc <- coda.samples(model, variable.names = c("theta1", "theta2", "y1.pred", "y2.pred"), 
+                     n.iter = 20000, thin = 10)
+summary(mcmc)
+parapost <- as_tibble(as.array(mcmc))
+
+## Figure 3.10 (page 50)
+ggplot(parapost) + 
+  geom_density(aes(x=theta1), color="grey") + 
+  geom_density(aes(x=theta2), color="black") +
+  scale_x_continuous(name = "theta", limits = c(0,5), breaks = seq(0,5,1)) +
+  scale_y_continuous(name="p(theta|y1...yn)", limits = c(0,3.2), breaks = seq(0,3,0.5)) +
+  theme_classic()
+
+dat.fig <- parapost %>% 
+  pivot_longer(-c("theta1", "theta2"), names_to = "group")
+ggplot(dat.fig) + 
+  geom_bar(aes(x=value, fill=group), position = "dodge") + 
+  theme_classic()
+
+## 6.4 Gibbs sampling ####
+## Example: Gibbs sampler (page 94)
+y <- c(1.64, 1.70, 1.72, 1.74, 1.82, 
+       1.82, 1.82, 1.90, 2.08)
+n <- length(y)
+mu0 <-1.9
+t20 <- 0.95^2
+s20 <-.01
+nu0 <- 1
+
+dat <- list(y = y, n = n,
+            mu0 = mu0, tau0 = sqrt(t20),
+            a = nu0/2, b = (nu0*s20)/2) 
+
+model <- jags.model(file = "JAGS_code/Example_C6_P94.txt", 
+                    data = dat, n.chains = 1)
+update(model, n.iter = 1000)
+mcmc <- coda.samples(model, variable.names = c("mu", "tau", "sigma"), 
+                     n.iter = 20000, thin = 10)
+summary(mcmc)
+
+## Figure 6.3 (page 96)
+PHI <- as.array(mcmc)
+mean.grid <- seq(1.505, 2.00, length=100) 
+prec.grid <- seq(1.75,  175,  length=100) 
+post.grid <- matrix(nrow=100, ncol=100)
+
+par(mfrow=c(1,3), mar=c(2.75,2.75,.5,.5), mgp=c(1.70,.70,0))
+sseq <- 1:1000
+
+image(mean.grid, prec.grid, post.grid, 
+      col=gray( (10:0)/10 ),
+      xlab=expression(theta), ylab=expression(tilde(sigma)^2) ,
+      xlim=range(PHI[,1]), ylim=range(PHI[,3]) )
+points(PHI[sseq,1], PHI[sseq,3], pch=".", cex=1.25 )
+
+plot(density(PHI[,1], adj=2),  
+     xlab=expression(theta), main="",
+     xlim=c(1.55,2.05),
+     ylab=expression( paste(italic("p("),
+                            theta,"|",italic(y[1]),"...",italic(y[n]),")",sep="")))
+abline(v=quantile(PHI[,1], prob=c(.025,.975)), lwd=2, col="gray")
+
+plot(density(PHI[,3], adj=2), 
+     main="",
+     xlab=expression(tilde(sigma)^2),
+     ylab=expression( paste(italic("p("),
+                            tilde(sigma)^2,"|",italic(y[1]),"...",italic(y[n]),")",sep=""))) 
+
+
+## 7.4 Gibbs sampling of the mean and covariance ####
+## Example: Reading comprehension (page 112)
+load("Data/reading.RData")
+R <- matrix(c(625,312.5,312.5,625), nrow=2, ncol=2)
+
+dat <- list(Y = reading,
+            mu0 = c(50, 50),
+            inv.Lambda0 = solve(R),
+            S0 = R,
+            eta0 = 2)
+
+model <- jags.model(file = "JAGS_code/Example_C7_P112.txt", 
+                    data = dat, n.chains = 1)
+update(model, n.iter = 10000)
+mcmc <- coda.samples(model, 
+                     variable.names = c("theta", "Sigma", "Y.pred"), 
+                     n.iter = 50000, thin = 10)
+
+summary(mcmc)
+postdist <- as_tibble(as.array(mcmc))
+quantile(postdist$`theta[2]` - postdist$`theta[1]`, probs = c(0.025, 0.5, 0.975))
+mean(postdist$`theta[2]` > postdist$`theta[1]`)
+
+## 8.4 Example: Math scores in U.S. public schools ####
+## page 137
+load("Data/nels.RData") 
+Y <- Y.school.mathscore
+nschool <- length(unique(Y[,1]))
+Nobs <- nrow(Y)
+
+mu0 <- 50; g20 <- 25
+eta0 <- 1; t20 <- 100
+nu0 <- 1; s20 <- 100
+
+dat <- list(y = Y[,2], school=Y[,1], 
+            nschool = nschool, Nobs = Nobs,
+            mu0 = mu0, g0 = 1/g20,
+            tau.a = eta0/2, tau.b = (eta0*t20)/2,
+            sigma.a = nu0/2, sigma.b = (nu0*s20)/2)
+
+model <- jags.model(file = "JAGS_code/Example_C8_P137.txt", 
+                    data = dat, n.chains = 1)
+update(model, n.iter = 1000)
+mcmc <- coda.samples(model, variable.names = c("mu", "inv.tau.squared", "inv.sigma.squared"), 
+                     n.iter = 50000, thin = 10)
+summary(mcmc)
+
+## Figure 8.7
+postdist <- as_tibble(as.array(mcmc)) %>% 
+  mutate(sigma2 = 1/inv.sigma.squared,
+         tau2 = 1/inv.tau.squared)
+
+ggplot(postdist) + 
+  geom_density(aes(x=mu)) +
+  scale_x_continuous(name = expression(mu),
+                     limits = c(45,51), breaks = seq(46,50,1)) +
+  theme_classic()
+
+ggplot(postdist) + 
+  geom_density(aes(x=sigma2)) +
+  scale_x_continuous(name = expression(sigma^2),
+                     limits = c(74,96), breaks = seq(75,95,5)) +
+  theme_classic()
+
+ggplot(postdist) + 
+  geom_density(aes(x=tau2)) +
+  scale_x_continuous(name = expression(tau^2),
+                     limits = c(9,51), breaks = seq(10,50,10)) +
+  theme_classic()
+
+## 11.3 Posterior analysis of the math score data ####
+load("Data/nelsSES.RData") 
+
+#### OLS fits
+ids <- sort(unique(nels$sch_id)) 
+m <- length(ids)
+Y <- list() ; X <-list() ; N<-NULL
+for(j in 1:m) {
+  Y[[j]] <- nels[nels$sch_id==ids[j], 4] 
+  N[j] <- sum(nels$sch_id==ids[j])
+  xj <- nels[nels$sch_id==ids[j], 3] 
+  xj <- (xj-mean(xj))
+  X[[j]] <- cbind(rep(1, N[j]), xj)
+}
+
+S2.LS <- BETA.LS <- NULL
+for(j in 1:m) {
+  fit <- lm(Y[[j]] ~ -1 + X[[j]] )
+  BETA.LS <- rbind(BETA.LS, c(fit$coef)) 
+  S2.LS <- c(S2.LS, summary(fit)$sigma^2) 
+} 
+
+####
+ids <- sort(unique(nels$sch_id)) 
+Nobs <- nrow(nels)
+nschool <- length(ids)
+mu0 <- unname(apply(BETA.LS, 2, mean))
+L0 <- unname(cov(BETA.LS))
+nu0 <- 1
+s20 <- mean(S2.LS)
+p <- 2
+school.index <- as.data.frame(cbind(ids, 1:length(ids)))
+nels.new <- left_join(nels, school.index, by=c("sch_id"="ids"))
+X <- cbind(rep(1, nrow(nels)), nels[,3])
+
+dat <- list(Nobs = Nobs, Y = nels[,4], 
+            school = nels.new$V2, 
+            nschool = nschool,
+            X = X,
+            mu0 = mu0,
+            inv.Lambda0 = solve(L0),
+            S0 = L0, eta0 = p+2,
+            sigma.a = nu0/2, sigma.b = (nu0*s20)/2)
+
+model <- jags.model(file = "JAGS_code/Example_C11_P200.txt", 
+                    data = dat, n.chains = 1)
+update(model, n.iter = 5000)
+mcmc <- coda.samples(model, variable.names = c("Theta", "Beta", "Beta.pred"), 
+                     n.iter = 10000, thin = 10)
+summary(mcmc)
+
+res <- as.array(mcmc) %>% as_tibble()
+
+## Figure 11.3 (left)
+res1 <- res %>% 
+  select(., c("Beta.pred[2]", "Theta[2]")) %>% 
+  set_names(c("beta2.pred", "theta2"))
+
+ggplot(res1) + 
+  geom_density(aes(x = beta2.pred), color = "grey") + 
+  geom_density(aes(x = theta2), color = "black") +
+  scale_x_continuous(name = "slope parameter",
+                     limits = c(-6, 8), breaks = c(-4,-2,0,2,4,6,8)) +
+  theme_classic()
+
+## Figure 11.3 (right)
+res2 <- apply(res[,1:200], 2, mean)
+
+res3 <- cbind(res2[1:100], res2[101:200]) %>% 
+  as_tibble() %>% 
+  set_names(c("beta1", "beta2"))
+
+beta1.mean <- mean(res3$beta1)
+beta2.mean <- mean(res3$beta2)
+
+ggplot(res3) + 
+  scale_x_continuous(name="SES", limits=c(-2,2)) +
+  scale_y_continuous(name="math score", limits=c(20,80)) +
+  geom_abline(aes(intercept=beta1, slope=beta2), color="grey") + 
+  geom_abline(aes(intercept=beta1.mean, slope=beta2.mean)) +
+  theme_classic()
