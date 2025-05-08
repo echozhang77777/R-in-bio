@@ -1,0 +1,18 @@
+
+library(rms)
+library(foreign)
+library(survival)
+setwd("D:/R work")
+ 
+dev<-read.csv("dev.csv") 
+head(dev)
+ 
+#下面是利用caret程序包将dev表格进行拆分。
+ 
+library(caret)
+set.seed(131)
+trianandvad<- createDataPartition(y=dev$id,p=0.70,list=FALSE)
+train <- dev[trianandvad, ]
+vadi<-dev[-trianandvad,] 
+write.csv(train, "train.csv")
+write.csv(vadi, "vadi.csv")
